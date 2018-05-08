@@ -4,6 +4,7 @@ from solver import Solver
 from data_loader import get_loader
 from torch.backends import cudnn
 from datetime import datetime
+from pathlib import Path
 
 
 def str2bool(v):
@@ -24,8 +25,12 @@ def main(config):
         os.makedirs(config.result_path)
 
     # Data loader
-    data_loader = get_loader(config.image_path, config.metadata_path, config.crop_size,
-                                   config.image_size, config.batch_size, config.mode)
+    data_loader = get_loader(
+            Path(config.image_path),
+            config.crop_size,
+            config.image_size,
+            config.batch_size,
+            config.mode)
 
     # Solver
     solver = Solver(data_loader, config)
@@ -40,8 +45,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Model hyper-parameters
-    parser.add_argument('--c_dim', type=int, default=6)
-    parser.add_argument('--c2_dim', type=int, default=8)
+    parser.add_argument('--c_dim', type=int, default=1)
     parser.add_argument('--crop_size', type=int, default=256)
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--g_conv_dim', type=int, default=64)
@@ -77,11 +81,9 @@ if __name__ == '__main__':
     parser.add_argument('--use_tensorboard', type=str2bool, default=True)
 
     # Path
+    parser.add_argument('--image_path', type=str, default='./data/comp/')
 
-    parser.add_argument('--image_path', type=str, default='./data/fashion/')
-    parser.add_argument('--metadata_path', type=str, default='./data/fashion/img_attr.csv')
-
-    main_log_path = './stargan/fashion'
+    main_log_path = './stargan/comp'
     log_path = '{}/logs'.format(main_log_path)
     sample_path = '{}/samples'.format(main_log_path)
     result_path = '{}/results'.format(main_log_path)

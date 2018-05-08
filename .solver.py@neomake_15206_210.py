@@ -22,6 +22,7 @@ class Solver(object):
 
         # Model hyper-parameters
         self.c_dim = config.c_dim
+        self.c2_dim = config.c2_dim
         self.image_size = config.image_size
         self.g_conv_dim = config.g_conv_dim
         self.d_conv_dim = config.d_conv_dim
@@ -149,12 +150,23 @@ class Solver(object):
         """Generate domain labels for dataset for debugging/testing.
         """
 
+
+        y = [torch.FloatTensor([1, 0, 0]),
+             torch.FloatTensor([0, 1, 0]),
+             torch.FloatTensor([0, 0, 1]),
+             torch.FloatTensor([1, 0, 0]),
+             torch.FloatTensor([0, 1, 0]),
+             torch.FloatTensor([0, 0, 1])]
+
         fixed_c_list = []
 
         for i in range(self.c_dim):
             fixed_c = real_c.clone()
             for c in fixed_c:
-                c *= -1
+                if i < 3:
+                    c[:3] = y[i]
+                else:
+                    c[3:] = y[i]
 
             fixed_c_list.append(self.to_var(fixed_c, volatile=True))
 
@@ -195,7 +207,7 @@ class Solver(object):
         start_time = time.time()
         for e in range(start, self.num_epochs):
             for i, (real_x, real_label) in enumerate(self.data_loader):
-
+                
                 # Generat fake labels randomly (target domain labels)
                 rand_idx = torch.randperm(real_label.size(0))
                 fake_label = real_label[rand_idx]
@@ -209,18 +221,12 @@ class Solver(object):
                 fake_c = self.to_var(fake_c)
                 real_label = self.to_var(real_label)   # this is same as real_c if dataset == 'CelebA'
                 fake_label = self.to_var(fake_label)
-
-                fake_label = fake_label.view(fake_label.numel())
-                real_label = real_label.view(real_label.numel())
-
+                
                 # ================== Train D ================== #
 
                 # Compute loss with real images
                 out_src, out_cls = self.D(real_x)
                 d_loss_real = - torch.mean(out_src)
-
-                print(out_cls)
-                print(real_label)
 
                 d_loss_cls = F.binary_cross_entropy_with_logits(
                     out_cls, real_label, size_average=False) / real_x.size(0)

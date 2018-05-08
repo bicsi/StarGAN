@@ -1,5 +1,8 @@
-# coding=utf-8
-
+from torch.utils import data
+from torchvision import transforms as T
+from torchvision.datasets import ImageFolder
+from PIL import Image
+from pathlib import Path
 import torch
 import os
 import random
@@ -10,16 +13,17 @@ from torchvision.datasets import ImageFolder
 from PIL import Image
 import pandas as pd
 
-
-class FashionDataset(Dataset):
-    def __init__(self, image_path, metadata_path, transform, mode):
+class ColorDataset(data.Dataset):
+    def __init__(self, image_path: Path, transform, mode: str) -> None:
         self.image_path = image_path
+        self.bw_train_path = image_path / 'trainA'
+        self.color_train_path = image_path / 'trainB'
+
+        self.bw_test_path = image_path / 'testA'
+        self.color_test_path = image_path / 'testB'
+
         self.transform = transform
         self.mode = mode
-        self.lines = pd.read_csv(metadata_path, sep='\t', encoding='utf-8')
-        self.num_data = self.lines.shape[0]
-        self.attr2idx = {}
-        self.idx2attr = {}
 
         print ('Start preprocessing dataset..!')
         random.seed(1234)
@@ -27,41 +31,30 @@ class FashionDataset(Dataset):
         print ('Finished preprocessing dataset..!')
 
         if self.mode == 'train':
-            self.num_data = len(self.train_filenames)
+            self.num_data = len(self.train_files)
         elif self.mode == 'test':
-            self.num_data = len(self.test_filenames)
+            self.num_data = len(self.test_files)
 
     def preprocess(self):
-        attrs = self.lines.columns[1:]
+        bw_train_images = [str(x) for x in self.bw_train_path.glob('*jpg')]
+        color_train_images = [str(x) for x in self.color_train_path.glob('*jpg')]
 
-        self.selected_attrs = [u'ärmellänge_langarm', u'ärmellänge_viertelarm', u'ärmellänge_ärmellos',
-                               u'muster_all-over-muster', u'muster_geblümt/floral', u'muster_gestreift']
+        bw_test_images = [str(x) for x in self.bw_test_path.glob('*jpg')]
+        color_test_images = [str(x) for x in self.color_test_path.glob('*jpg')]
 
-        self.train_filenames = []
-        self.train_labels = []
-        self.test_filenames = []
-        self.test_labels = []
+        self.train_files = bw_train_images + color_train_images
+        self.train_labels = [[-1]] * len(bw_train_images) + [[1]] * len(color_train_images)
 
-        lines = self.lines[self.lines['category_kleider'] == 1]
-        lines = lines[['img_path'] + self.selected_attrs]
-        train_set = lines.sample(frac=0.8)
-        test_set = lines.drop(train_set.index)
-
-        self.train_filenames = train_set['img_path'].tolist()
-        self.train_labels = train_set.iloc[:, 1:].as_matrix().tolist()
-
-        self.test_filenames = test_set['img_path'].tolist()
-        self.test_labels = test_set.iloc[:, 1:].as_matrix().tolist()
+        self.test_files = bw_test_images + color_test_images
+        self.test_labels = [[-1]] * len(bw_test_images) + [[1]] * len(color_test_images)
 
 
     def __getitem__(self, index):
         if self.mode == 'train':
-            file_path = u''.join((self.image_path, self.train_filenames[index])).encode('utf-8').strip()
-            image = Image.open(file_path)
+            image = Image.open(self.train_files[index])
             label = self.train_labels[index]
         elif self.mode in ['test']:
-            file_path = u''.join((self.image_path, self.test_filenames[index])).encode('utf-8').strip()
-            image = Image.open(file_path)
+            image = Image.open(self.train_files[index])
             label = self.test_labels[index]
 
         return self.transform(image), torch.FloatTensor(label)
@@ -70,31 +63,25 @@ class FashionDataset(Dataset):
         return self.num_data
 
 
+def get_loader(image_path: Path, crop_size: int = 256, image_size: int = 256,
+        batch_size: int = 16,
+        mode: str = 'train',
+        num_workers: str = 1):
+    """Build and return a data loader."""
 
-def get_loader(image_path, metadata_path, crop_size, image_size, batch_size, mode='train'):
-    """Build and return data loader."""
-
+    transform = []
     if mode == 'train':
-        transform = transforms.Compose([
-            transforms.CenterCrop(crop_size),
-            transforms.Resize(image_size, interpolation=Image.ANTIALIAS),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    else:
-        transform = transforms.Compose([
-            transforms.CenterCrop(crop_size),
-            transforms.Scale(image_size, interpolation=Image.ANTIALIAS),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        transform.append(T.RandomHorizontalFlip())
+    transform.append(T.CenterCrop(crop_size))
+    transform.append(T.Resize(image_size))
+    transform.append(T.ToTensor())
+    transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
+    transform = T.Compose(transform)
 
-    dataset = FashionDataset(image_path, metadata_path, transform, mode)
+    dataset = ColorDataset(image_path, transform, mode)
 
-    shuffle = False
-    if mode == 'train':
-        shuffle = True
-
-    data_loader = DataLoader(dataset=dataset,
-                             batch_size=batch_size,
-                             shuffle=shuffle)
+    data_loader = data.DataLoader(dataset=dataset,
+                                  batch_size=batch_size,
+                                  shuffle=(mode=='train'),
+                                  num_workers=num_workers)
     return data_loader
