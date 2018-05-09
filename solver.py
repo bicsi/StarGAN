@@ -194,11 +194,11 @@ class Solver(object):
         # Start training
         start_time = time.time()
         for e in range(start, self.num_epochs):
-            print("Epoch: " + e)
-            print(list(real_x.size()))
-            print(list(real_label.size()))
+            print("Epoch: " + str(e))
 
             for i, (real_x, real_label) in enumerate(self.data_loader):
+                print(list(real_x.size()))
+                print(list(real_label.size()))
                 
                 # Generat fake labels randomly (target domain labels)
                 rand_idx = torch.randperm(real_label.size(0))
