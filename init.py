@@ -6,10 +6,10 @@ from random import randint, shuffle
 from pathlib import Path
 
 datasets = ['apple2orange',
-        'summer2winter_yosemite',
-        'horse2zebra',
-        'monet2photo',
-        'cezanne2photo',
+ #       'summer2winter_yosemite',
+ #       'horse2zebra',
+ #       'monet2photo',
+ #       'cezanne2photo',
         ]
 
 def download_all():
