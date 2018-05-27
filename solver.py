@@ -351,13 +351,10 @@ class Solver(object):
         for i, (real_x, org_c) in enumerate(data_loader):
             real_x = self.to_var(real_x, volatile=True)
 
-            if self.dataset == 'CelebA':
-                target_c_list = self.make_data_labels(org_c)
-            else:
-                target_c_list = []
-                for j in range(self.c_dim):
-                    target_c = self.one_hot(torch.ones(real_x.size(0)) * j, self.c_dim)
-                    target_c_list.append(self.to_var(target_c, volatile=True))
+            target_c_list = []
+            for j in range(self.c_dim):
+                target_c = self.one_hot(torch.ones(real_x.size(0)) * j, self.c_dim)
+                target_c_list.append(self.to_var(target_c, volatile=True))
 
             # Start translations
             fake_image_list = [real_x]
