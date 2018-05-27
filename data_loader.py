@@ -2,73 +2,75 @@ from torch.utils import data
 from torchvision import transforms as T
 from torchvision.datasets import ImageFolder
 from PIL import Image
-from pathlib import Path
 import torch
 import os
 import random
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-from torchvision import transforms
-from torchvision.datasets import ImageFolder
-from PIL import Image
-import pandas as pd
 
-class ColorDataset(data.Dataset):
-    def __init__(self, image_path: Path, transform, mode: str) -> None:
-        self.image_path = image_path
-        self.bw_train_path = image_path / 'trainA'
-        self.color_train_path = image_path / 'trainB'
 
-        self.bw_test_path = image_path / 'testA'
-        self.color_test_path = image_path / 'testB'
+class CelebA(data.Dataset):
+    """Dataset class for the CelebA dataset."""
 
+    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode):
+        """Initialize and preprocess the CelebA dataset."""
+        self.image_dir = image_dir
+        self.attr_path = attr_path
+        self.selected_attrs = selected_attrs
         self.transform = transform
         self.mode = mode
-
-        print ('Start preprocessing dataset..!')
-        random.seed(1234)
+        self.train_dataset = []
+        self.test_dataset = []
+        self.attr2idx = {}
+        self.idx2attr = {}
         self.preprocess()
-        print ('Finished preprocessing dataset..!')
 
-        if self.mode == 'train':
-            self.num_data = len(self.train_files)
-        elif self.mode == 'test':
-            self.num_data = len(self.test_files)
+        if mode == 'train':
+            self.num_images = len(self.train_dataset)
+        else:
+            self.num_images = len(self.test_dataset)
 
     def preprocess(self):
-        bw_train_images = [str(x) for x in self.bw_train_path.glob('*jpg')]
-        color_train_images = [str(x) for x in self.color_train_path.glob('*jpg')]
+        """Preprocess the CelebA attribute file."""
+        lines = [line.rstrip() for line in open(self.attr_path, 'r')]
+        all_attr_names = lines[1].split()
+        for i, attr_name in enumerate(all_attr_names):
+            self.attr2idx[attr_name] = i
+            self.idx2attr[i] = attr_name
 
-        bw_test_images = [str(x) for x in self.bw_test_path.glob('*jpg')]
-        color_test_images = [str(x) for x in self.color_test_path.glob('*jpg')]
+        lines = lines[2:]
+        random.seed(1234)
+        random.shuffle(lines)
+        for i, line in enumerate(lines):
+            split = line.split()
+            filename = split[0]
+            values = split[1:]
 
-        self.train_files = bw_train_images + color_train_images
-        self.train_labels = [[-1]] * len(bw_train_images) + [[1]] * len(color_train_images)
+            label = []
+            for attr_name in self.selected_attrs:
+                idx = self.attr2idx[attr_name]
+                label.append(values[idx] == '1')
 
-        self.test_files = bw_test_images + color_test_images
-        self.test_labels = [[-1]] * len(bw_test_images) + [[1]] * len(color_test_images)
+            if (i+1) < 2000:
+                self.test_dataset.append([filename, label])
+            else:
+                self.train_dataset.append([filename, label])
 
+        print('Finished preprocessing the CelebA dataset...')
 
     def __getitem__(self, index):
-        if self.mode == 'train':
-            image = Image.open(self.train_files[index])
-            label = self.train_labels[index]
-        elif self.mode in ['test']:
-            image = Image.open(self.train_files[index])
-            label = self.test_labels[index]
-
+        """Return one image and its corresponding attribute label."""
+        dataset = self.train_dataset if self.mode == 'train' else self.test_dataset
+        filename, label = dataset[index]
+        image = Image.open(os.path.join(self.image_dir, filename))
         return self.transform(image), torch.FloatTensor(label)
 
     def __len__(self):
-        return self.num_data
+        """Return the number of images."""
+        return self.num_images
 
 
-def get_loader(image_path: Path, crop_size: int = 256, image_size: int = 256,
-        batch_size: int = 16,
-        mode: str = 'train',
-        num_workers: str = 1):
+def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128,
+               batch_size=16, dataset='CelebA', mode='train', num_workers=1):
     """Build and return a data loader."""
-
     transform = []
     if mode == 'train':
         transform.append(T.RandomHorizontalFlip())
@@ -78,7 +80,10 @@ def get_loader(image_path: Path, crop_size: int = 256, image_size: int = 256,
     transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
     transform = T.Compose(transform)
 
-    dataset = ColorDataset(image_path, transform, mode)
+    if dataset == 'CelebA':
+        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode)
+    elif dataset == 'RaFD':
+        dataset = ImageFolder(image_dir, transform)
 
     data_loader = data.DataLoader(dataset=dataset,
                                   batch_size=batch_size,

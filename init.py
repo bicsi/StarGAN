@@ -19,11 +19,15 @@ def download_all():
         subprocess.run(['bash', 'download_dataset.sh', d], check=True)
 
 
+def force_make(path: Path):
+    if path.exists():
+        shutil.rmtree(str(path))
+    path.mkdir()
+
+
 def make_comp():
-    comp = Path('data/comp')
-    if comp.exists():
-        shutil.rmtree(str(comp))
-    comp.mkdir()
+    comp = Path('data/rafd')
+    force_make(comp)
 
     for d in datasets:
         dpath = Path('data') / d
@@ -32,8 +36,8 @@ def make_comp():
 
 
 def partition():
-    comp = Path('data/comp')
-    images = list(comp.glob('*.jpg'))
+    rafd = Path('data/rafd')
+    images = list(rafd.glob('*.jpg'))
     shuffle(images)
 
     N = len(images)
@@ -46,30 +50,22 @@ def partition():
     assert len(test) == ntest
     assert len(train) == ntrain
 
-    def force_make(path: Path):
-        if path.exists():
-            shutil.rmtree(str(path))
-        path.mkdir()
-
     def conv(src: str, dst: str):
         print('Converting {}'.format(src))
         subprocess.run(['convert', src, '-colorspace', 'Gray', dst], check=True)
         subprocess.run(['convert', dst, '-colorspace', 'sRGB', '-type', 'truecolor', dst], check=True)
 
-    force_make(comp / 'testA')
-    force_make(comp / 'trainA')
-    for f in test:
-        conv(str(f), str(comp / 'testA' / f.name))
-    for f in train:
-        conv(str(f), str(comp / 'trainA' / f.name))
-
-    force_make(comp / 'testB')
-    force_make(comp / 'trainB')
+    for d1 in ['train', 'test']:
+        force_make(rafd / d1)
+        for d2 in ['bw', 'color']:
+            force_make(rafd / d1 / d2)
 
     for f in test:
-        shutil.copy(str(f), str(comp / 'testB'))
+        shutil.copy(str(f), str(rafd / 'test' / 'color'))
+        conv(str(f), str(rafd / 'test' / 'bw' / f.name))
     for f in train:
-        shutil.copy(str(f), str(comp / 'trainB'))
+        shutil.copy(str(f), str(rafd / 'train' / 'color'))
+        conv(str(f), str(rafd / 'train' / 'bw' / f.name))
 
 
 def main():
