@@ -15,7 +15,6 @@ from PIL import Image
 
 
 class Solver(object):
-
     def __init__(self, data_loader, config):
         # Data loader
         self.data_loader = data_loader
@@ -71,6 +70,11 @@ class Solver(object):
         if self.pretrained_model:
             self.load_pretrained_model()
 
+    def cuda_or_default(self, x):
+        if torch.cuda.is_available():
+            return x.cuda()
+        return x
+
     def build_model(self):
 
         self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num, self.image_size)
@@ -84,9 +88,8 @@ class Solver(object):
         self.print_network(self.G, 'G')
         self.print_network(self.D, 'D')
 
-        if torch.cuda.is_available():
-            self.G.cuda()
-            self.D.cuda()
+        self.cuda_or_default(self.G)
+        self.cuda_or_default(self.D)
 
     def print_network(self, model, name):
         num_params = 0
@@ -118,9 +121,7 @@ class Solver(object):
         self.d_optimizer.zero_grad()
 
     def to_var(self, x, volatile=False):
-        if torch.cuda.is_available():
-            x = x.cuda()
-        return Variable(x, volatile=volatile)
+        return Variable(self.cuda_or_default(x), volatile=volatile)
 
     def denorm(self, x):
         out = (x + 1) / 2
@@ -197,10 +198,8 @@ class Solver(object):
             print("Epoch: " + str(e))
 
             for i, (real_x, real_label) in enumerate(self.data_loader):
-                print(list(real_x.size()))
-                print(list(real_label.size()))
-                
-                # Generat fake labels randomly (target domain labels)
+
+                # Generate fake labels randomly (target domain labels)
                 rand_idx = torch.randperm(real_label.size(0))
                 fake_label = real_label[rand_idx]
 
@@ -209,9 +208,9 @@ class Solver(object):
 
                 # Convert tensor to variable
                 real_x = self.to_var(real_x)
-                real_c = self.to_var(real_c)           # input for the generator
+                real_c = self.to_var(real_c)  # input for the generator
                 fake_c = self.to_var(fake_c)
-                real_label = self.to_var(real_label)   # this is same as real_c if dataset == 'CelebA'
+                real_label = self.to_var(real_label)  # this is same as real_c if dataset == 'CelebA'
                 fake_label = self.to_var(fake_label)
 
                 fake_label = fake_label.view(fake_label.numel())
@@ -223,14 +222,11 @@ class Solver(object):
                 out_src, out_cls = self.D(real_x)
                 d_loss_real = - torch.mean(out_src)
 
-                print(out_cls)
-                print(real_label)
-
                 d_loss_cls = F.binary_cross_entropy_with_logits(
                     out_cls, real_label, size_average=False) / real_x.size(0)
 
                 # Compute classification accuracy of the discriminator
-                if (i+1) % self.log_step == 0:
+                if (i + 1) % self.log_step == 0:
                     accuracies = self.compute_accuracy(out_cls, real_label)
                     log = ["{:.2f}".format(acc) for acc in accuracies.data.cpu().numpy()]
                     print('Classification Acc: ')
@@ -249,20 +245,21 @@ class Solver(object):
                 self.d_optimizer.step()
 
                 # Compute gradient penalty
-                alpha = torch.rand(real_x.size(0), 1, 1, 1).cuda().expand_as(real_x)
+
+                alpha = self.cuda_or_default(torch.rand(real_x.size(0), 1, 1, 1)).expand_as(real_x)
                 interpolated = Variable(alpha * real_x.data + (1 - alpha) * fake_x.data, requires_grad=True)
                 out, out_cls = self.D(interpolated)
 
                 grad = torch.autograd.grad(outputs=out,
                                            inputs=interpolated,
-                                           grad_outputs=torch.ones(out.size()).cuda(),
+                                           grad_outputs=self.cuda_or_default(torch.ones(out.size())),
                                            retain_graph=True,
                                            create_graph=True,
                                            only_inputs=True)[0]
 
                 grad = grad.view(grad.size(0), -1)
                 grad_l2norm = torch.sqrt(torch.sum(grad ** 2, dim=1))
-                d_loss_gp = torch.mean((grad_l2norm - 1)**2)
+                d_loss_gp = torch.mean((grad_l2norm - 1) ** 2)
 
                 # Backward + Optimize
                 d_loss = self.lambda_gp * d_loss_gp
@@ -278,8 +275,7 @@ class Solver(object):
                 loss['D/loss_gp'] = d_loss_gp.data[0]
 
                 # ================== Train G ================== #
-                if (i+1) % self.d_train_repeat == 0:
-
+                if (i + 1) % self.d_train_repeat == 0:
                     # Original-to-target and target-to-original domain
                     fake_x = self.G(real_x, fake_c)
                     rec_x = self.G(fake_x, real_c)
@@ -304,12 +300,12 @@ class Solver(object):
                     loss['G/loss_cls'] = g_loss_cls.data[0]
 
                 # Print out log info
-                if (i+1) % self.log_step == 0:
+                if (i + 1) % self.log_step == 0:
                     elapsed = time.time() - start_time
                     elapsed = str(datetime.timedelta(seconds=elapsed))
 
                     log = "Elapsed [{}], Epoch [{}/{}], Iter [{}/{}]".format(
-                        elapsed, e+1, self.num_epochs, i+1, iters_per_epoch)
+                        elapsed, e + 1, self.num_epochs, i + 1, iters_per_epoch)
 
                     for tag, value in loss.items():
                         log += ", {}: {:.4f}".format(tag, value)
@@ -320,28 +316,28 @@ class Solver(object):
                             self.logger.scalar_summary(tag, value, e * iters_per_epoch + i + 1)
 
                 # Translate fixed images for debugging
-                if (i+1) % self.sample_step == 0:
+                if (i + 1) % self.sample_step == 0:
                     fake_image_list = [fixed_x]
                     for fixed_c in fixed_c_list:
                         fake_image_list.append(self.G(fixed_x, fixed_c))
                     fake_images = torch.cat(fake_image_list, dim=3)
                     save_image(self.denorm(fake_images.data.cpu()),
-                        os.path.join(self.sample_path, '{}_{}_fake.png'.format(e+1, i+1)),nrow=1, padding=0)
+                               os.path.join(self.sample_path, '{}_{}_fake.png'.format(e + 1, i + 1)), nrow=1, padding=0)
                     print('Translated images and saved into {}..!'.format(self.sample_path))
 
                 # Save model checkpoints
-                if (i+1) % self.model_save_step == 0:
+                if (i + 1) % self.model_save_step == 0:
                     torch.save(self.G.state_dict(),
-                        os.path.join(self.model_save_path, '{}_{}_G.pth'.format(e+1, i+1)))
+                               os.path.join(self.model_save_path, '{}_{}_G.pth'.format(e + 1, i + 1)))
                     torch.save(self.D.state_dict(),
-                        os.path.join(self.model_save_path, '{}_{}_D.pth'.format(e+1, i+1)))
+                               os.path.join(self.model_save_path, '{}_{}_D.pth'.format(e + 1, i + 1)))
 
             # Decay learning rate
-            if (e+1) > (self.num_epochs - self.num_epochs_decay):
+            if (e + 1) > (self.num_epochs - self.num_epochs_decay):
                 g_lr -= (self.g_lr / float(self.num_epochs_decay))
                 d_lr -= (self.d_lr / float(self.num_epochs_decay))
                 self.update_lr(g_lr, d_lr)
-                print ('Decay learning rate to g_lr: {}, d_lr: {}.'.format(g_lr, d_lr))
+                print('Decay learning rate to g_lr: {}, d_lr: {}.'.format(g_lr, d_lr))
 
     def test(self):
         """Facial attribute transfer on CelebA or facial expression synthesis on RaFD."""
@@ -368,6 +364,6 @@ class Solver(object):
             for target_c in target_c_list:
                 fake_image_list.append(self.G(real_x, target_c))
             fake_images = torch.cat(fake_image_list, dim=3)
-            save_path = os.path.join(self.result_path, '{}_fake.png'.format(i+1))
+            save_path = os.path.join(self.result_path, '{}_fake.png'.format(i + 1))
             save_image(self.denorm(fake_images.data), save_path, nrow=1, padding=0)
             print('Translated test images and saved into "{}"..!'.format(save_path))

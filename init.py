@@ -5,16 +5,19 @@ import subprocess
 from random import randint, shuffle
 from pathlib import Path
 
-datasets = ['apple2orange',
- #       'summer2winter_yosemite',
- #       'horse2zebra',
- #       'monet2photo',
- #       'cezanne2photo',
-        ]
+datasets = [
+    'apple2orange',
+    # 'summer2winter_yosemite',
+    # 'horse2zebra',
+    # 'monet2photo',
+    # 'cezanne2photo',
+]
+
 
 def download_all():
     for d in datasets:
         subprocess.run(['bash', 'download_dataset.sh', d], check=True)
+
 
 def make_comp():
     comp = Path('data/comp')
@@ -27,17 +30,18 @@ def make_comp():
         for img in dpath.glob('**/*.jpg'):
             shutil.copy(str(img), str(comp))
 
+
 def partition():
     comp = Path('data/comp')
     images = list(comp.glob('*.jpg'))
     shuffle(images)
 
     N = len(images)
-    ntest = int(N  * 0.1)
+    ntest = int(N * 0.1)
     ntrain = N - ntest
 
     test = images[: ntest]
-    train = images[ntest: ]
+    train = images[ntest:]
 
     assert len(test) == ntest
     assert len(train) == ntrain
@@ -46,7 +50,6 @@ def partition():
         if path.exists():
             shutil.rmtree(str(path))
         path.mkdir()
-
 
     def conv(src: str, dst: str):
         print('Converting {}'.format(src))
@@ -73,6 +76,7 @@ def main():
     download_all()
     make_comp()
     partition()
+
 
 if __name__ == '__main__':
     main()
