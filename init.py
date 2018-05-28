@@ -7,7 +7,7 @@ from pathlib import Path
 
 datasets = [
     'apple2orange',
-    'summer2winter_yosemite',
+    # 'summer2winter_yosemite',
     # 'horse2zebra',
     # 'monet2photo',
     # 'cezanne2photo',
@@ -49,24 +49,31 @@ def partition():
 
     assert len(test) == ntest
     assert len(train) == ntrain
-
+    
     def conv(src: str, dst: str):
         print('Converting {}'.format(src))
-        subprocess.run(['convert', src, '-colorspace', 'Gray', dst], check=True)
-        subprocess.run(['convert', dst, '-colorspace', 'sRGB', '-type', 'truecolor', dst], check=True)
+        from PIL import Image
+        img = Image.open(src).convert('LA').convert('RGB')
+        img.save(dst)
 
     for d1 in ['train', 'test']:
         force_make(rafd / d1)
         for d2 in ['bw', 'color']:
             force_make(rafd / d1 / d2)
 
+    it = 0
     for f in test:
-        shutil.copy(str(f), str(rafd / 'test' / 'color'))
-        conv(str(f), str(rafd / 'test' / 'bw' / f.name))
+        if it % 2 == 0:
+            shutil.copy(str(f), str(rafd / 'test' / 'color'))
+        else:
+            conv(str(f), str(rafd / 'test' / 'bw' / f.name))
+        it += 1
     for f in train:
-        shutil.copy(str(f), str(rafd / 'train' / 'color'))
-        conv(str(f), str(rafd / 'train' / 'bw' / f.name))
-
+        if it % 2 == 0:
+            shutil.copy(str(f), str(rafd / 'train' / 'color'))
+        else:
+            conv(str(f), str(rafd / 'train' / 'bw' / f.name))
+        it += 1
 
 def main():
     download_all()
