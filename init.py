@@ -7,7 +7,7 @@ from pathlib import Path
 
 datasets = [
     'apple2orange',
-    # 'summer2winter_yosemite',
+    'summer2winter_yosemite',
     # 'horse2zebra',
     # 'monet2photo',
     # 'cezanne2photo',
