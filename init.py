@@ -61,23 +61,16 @@ def partition():
         for d2 in ['bw', 'color']:
             force_make(rafd / d1 / d2)
 
-    it = 0
     for f in test:
-        if it % 2 == 0:
-            shutil.copy(str(f), str(rafd / 'test' / 'color'))
-        else:
-            conv(str(f), str(rafd / 'test' / 'bw' / f.name))
-        it += 1
+        shutil.copy(str(f), str(rafd / 'test' / 'color'))
+        conv(str(f), str(rafd / 'test' / 'bw' / f.name))
     for f in train:
-        if it % 2 == 0:
-            shutil.copy(str(f), str(rafd / 'train' / 'color'))
-        else:
-            conv(str(f), str(rafd / 'train' / 'bw' / f.name))
-        it += 1
+        shutil.copy(str(f), str(rafd / 'train' / 'color'))
+        conv(str(f), str(rafd / 'train' / 'bw' / f.name))
 
     for filename in os.listdir(str(rafd)):
-      if filename.endswith('.jpg'):
-        os.unlink(str(rafd / filename))
+        if filename.endswith('.jpg'):
+            os.unlink(str(rafd / filename))
 
 def main():
     download_all()
