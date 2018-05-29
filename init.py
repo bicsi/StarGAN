@@ -75,10 +75,15 @@ def partition():
             conv(str(f), str(rafd / 'train' / 'bw' / f.name))
         it += 1
 
+    for filename in os.listdir(str(rafd)):
+      if filename.endswith('.jpg'):
+        os.unlink(str(rafd / filename))
+
 def main():
     download_all()
     make_comp()
     partition()
+
 
 
 if __name__ == '__main__':
